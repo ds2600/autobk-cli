@@ -1,0 +1,4 @@
+db_host = "localhost"
+db_name = "my_database"
+db_user = "my_username"
+db_pass = "my_password"
