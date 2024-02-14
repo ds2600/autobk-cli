@@ -20,7 +20,7 @@ jobs:
         override: true
 
     - name: Rename ex_Settings.toml
-      run: cp ex_Settings.toml Settings.toml
+      run: cp src/ex_Settings.toml src/Settings.toml
 
     - name: Build
       uses: actions-rs/cargo@v1
