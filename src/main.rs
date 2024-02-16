@@ -31,7 +31,24 @@ enum Action {
         #[clap(flatten)]
         data: CommonData,
     },
+    Backup {
+        #[clap(flatten)]
+        data: BackupData,
+    },
+    Get {
+        #[clap(flatten)]
+        data: QueryData,
+    },
 }
+
+
+#[derive(Parser)]
+#[derive(Debug)]
+struct QueryData {
+    #[clap(short = 'n', long, value_name = "NAME")]
+    name: String,
+}
+
 
 #[derive(Parser)]
 #[derive(Debug)]
@@ -66,6 +83,27 @@ struct CommonData {
     #[clap(short = 'w', long, value_name = "WEEKS")]
     weeks: u8,
 
+}
+
+#[derive(Parser)]
+#[derive(Debug)]
+struct NameData {
+    #[clap(short = 'n', long, value_name = "NAME")]
+    name: String,
+}
+
+#[derive(Parser)]
+#[derive(Debug)]
+struct IdData {
+    #[clap(short = 'd', long, value_name = "DEVICE_ID")]
+    device_id: String,
+}
+
+#[derive(Parser)]
+#[derive(Debug)]
+enum BackupData {
+    NameData(NameData),
+    IdData(IdData),
 }
 
 fn main() {
@@ -122,10 +160,65 @@ fn main() {
             }
         }
         Action::Modify { data } => {
-            println!("Modifying data: {:?}", data);
+            println!("Modifying data.");
         }
         Action::Delete { data } => {
-            println!("Deleting data: {:?}", data)
+            println!("Deleting data");
+        }
+        Action::Backup { data } => {
+            if data.name.is_empty() {
+                println!("Invalid name");
+                return;
+            }
+        }
+        Action::Get { data } => {
+            if data.name.is_empty() {
+                println!("Invalid name");
+                return;
+            }
+
+            let mut settings = Config::default();
+            settings
+                .merge(File::from_str(include_str!("Settings.toml"), FileFormat::Toml))
+                .unwrap();
+
+            let db = OptsBuilder::new()
+                .ip_or_hostname(Some(settings.get::<String>("db_host").unwrap()))
+                .db_name(Some(settings.get::<String>("db_name").unwrap()))
+                .user(Some(settings.get::<String>("db_user").unwrap()))
+                .pass(Some(settings.get::<String>("db_pass").unwrap()));
+
+            let pool = match Pool::new(db) {
+                Ok(pool) => pool,
+                Err(err) => {
+                    println!("Error: {}", err);
+                    return;
+                }
+            };
+
+            let mut conn = match pool.get_conn() {
+                Ok(conn) => conn,
+                Err(err) => {
+                    println!("Error: {}", err);
+                    return;
+                }
+            };
+
+            let sql = "SELECT kSelf, sName FROM Device WHERE sName = :name";
+
+            let params = params! {
+                "name" => &data.name,
+            };
+
+            let result: mysql::QueryResult<mysql::Binary> = conn.exec_iter(sql, params).unwrap();
+
+            for row_result in result {
+                let row = row_result.unwrap();
+                let k_self: i32 = row.get("kSelf").unwrap();
+                let s_name: String = row.get("sName").unwrap();
+
+                println!("Name: {}, ID: {}", s_name, k_self);
+            }
         }
     }
 }
